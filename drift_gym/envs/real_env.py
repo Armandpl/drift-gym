@@ -16,22 +16,24 @@ from mpu9250_jmdev.mpu_9250 import MPU9250
 
 from jetracer.nvidia_racecar import NvidiaRacecar
 
-Observation = namedtuple('accel_x', 'accel_y', 'accel_z',
-                         'gyro_x', 'gyro_y', 'gyro_z')
+Observation = namedtuple('Observation', ['accel_x', 'accel_y', 'accel_z',
+                         'gyro_x', 'gyro_y', 'gyro_z'])
+
+THROTTLE_GAIN = -1
 
 
 class RealEnv(gym.Env):
     metadata = {'render.modes': []}
 
-    def __init__(self, throttle=0.001, dt=0.05, horizon=200):
+    def __init__(self, throttle=0.003, dt=0.05, horizon=200):
         self.default_throttle = throttle
         self.dt = dt
         self.horizon = horizon
 
-        self.action_space = spaces.Box(low=-1, high=1, shape=1)
+        self.action_space = spaces.Box(low=-1, high=1, shape=(1,))
         self.observation_space = spaces.Box(low=-np.inf,
                                             high=np.inf,
-                                            shape=(4,))
+                                            shape=(6,))
 
         self.car = NvidiaRacecar()
 
@@ -65,7 +67,7 @@ class RealEnv(gym.Env):
         return observation, reward, done, info
 
     def get_reward(self, observation):
-        return observation.gyro_z
+        return np.abs(observation.gyro_z)
 
     def get_observation(self):
         accel_x, accel_y, accel_z = self.mpu.readAccelerometerMaster()
@@ -76,11 +78,13 @@ class RealEnv(gym.Env):
 
     def reset(self):
         self.steps_taken = 0
-        self.car.throttle = self.default_throttle
+        self.car.throttle = self.default_throttle*THROTTLE_GAIN
         self.car.steering = 0
+
+        return self.get_observation()
 
     def render(self, mode='human'):
         raise NotImplementedError
 
     def close(self):
-        self.car.throttle = -0.5  # brake
+        self.car.throttle = -0.5*THROTTLE_GAIN  # brake
